@@ -22,6 +22,11 @@
         display: flex;
         flex-direction: column;
         min-width: 0px;
+        border: 1px solid var(--inactive--color);
+        background-color: var(--plugin--background);
+        margin: 8px;
+        border-radius: 3px;
+        overflow: hidden;
 
         .error {
             flex: 1 1 auto;
@@ -45,15 +50,11 @@
         margin-bottom: -6px;
     }
 
-    .split-panel.orient-vertical
-        > .split-panel-child:not(.is-width-override)
-        #editor-container {
-        height: 242px;
+    .split-panel.orient-vertical > .split-panel-child:not(.is-width-override) #editor-container {
+        height: 300px;
     }
 
-    .split-panel:not(.orient-vertical)
-        > .split-panel-child:not(.is-width-override)
-        #editor-container {
+    .split-panel.orient-horizontal > .split-panel-child:not(.is-width-override) #editor-container {
         width: 400px;
     }
 

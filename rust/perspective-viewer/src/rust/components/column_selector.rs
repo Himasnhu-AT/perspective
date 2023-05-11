@@ -45,6 +45,8 @@ pub struct ColumnSelectorProps {
     pub renderer: Renderer,
     pub dragdrop: DragDrop,
 
+    pub on_open_expr_panel: Callback<Option<String>>,
+
     #[prop_or_default]
     pub on_resize: Option<Rc<PubSub<()>>>,
 
@@ -270,7 +272,8 @@ impl Component for ColumnSelector {
                             renderer={ &ctx.props().renderer }
                             ondragenter={ ondragenter }
                             ondragend={ &ondragend }
-                            onselect={ &onselect }/>
+                            onselect={ &onselect }
+                            on_open_expr_panel={ &ctx.props().on_open_expr_panel } />
                     </ScrollPanelItem>
                 }
             })
@@ -293,7 +296,8 @@ impl Component for ColumnSelector {
                             session={ &ctx.props().session }
                             renderer={ &ctx.props().renderer }
                             onselect={ &onselect }
-                            ondragend={ &ondragend } />
+                            ondragend={ &ondragend }
+                            on_open_expr_panel={ &ctx.props().on_open_expr_panel } />
                     </ScrollPanelItem>
                 }
             })
@@ -309,7 +313,8 @@ impl Component for ColumnSelector {
             <ScrollPanelItem key={ "__add_expression__" } size={ size }>
                 <AddExpressionButton
                     session={ &ctx.props().session }
-                    renderer={ &ctx.props().renderer }>
+                    renderer={ &ctx.props().renderer }
+                    on_open_expr_panel={ &ctx.props().on_open_expr_panel }>
                 </AddExpressionButton>
             </ScrollPanelItem>
         };

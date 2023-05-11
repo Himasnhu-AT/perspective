@@ -260,9 +260,12 @@ impl Component for SplitPanel {
         assert!(ctx.props().validate());
         enable_weak_link_test!(ctx.props(), ctx.link());
         let len = ctx.props().children.len();
+        // cant just use vec![Default::default(); len] as it would
+        // use the same underlying NodeRef for each element.
+        let refs = Vec::from_iter(std::iter::repeat_with(Default::default).take(len));
         Self {
             resize_state: None,
-            refs: vec![Default::default(); len],
+            refs,
             styles: vec![Default::default(); len],
             on_reset: None,
         }
@@ -309,13 +312,13 @@ impl Component for SplitPanel {
     fn changed(&mut self, ctx: &Context<Self>, _old: &Self::Properties) -> bool {
         assert!(ctx.props().validate());
         let new_len = ctx.props().children.len();
-        self.refs.resize(new_len, Default::default());
+        self.refs.resize_with(new_len, Default::default);
         self.styles.resize(new_len, Default::default());
         true
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let mut iter = ctx.props().children.iter();
+        // let mut iter = ctx.props().children.iter();
         let orientation = ctx.props().orientation;
         let mut classes = classes!("split-panel");
         if orientation == Orientation::Vertical {
@@ -325,38 +328,33 @@ impl Component for SplitPanel {
         if ctx.props().reverse {
             classes.push("orient-reverse");
         }
-
         let contents = html_template! {
             <LocalStyle href={ css!("containers/split-panel") } />
-            <SplitPanelChild
-                style={ self.styles[0].clone() }
-                ref_={ self.refs[0].clone() }>
-
-                { iter.next().unwrap() }
-            </SplitPanelChild>
             {
-                for iter.enumerate().map(|(i, x)| {
-                    html_template! {
-                        <SplitPanelDivider
-                            i={ i }
-                            orientation={ ctx.props().orientation }
-                            link={ ctx.link().clone() }>
+                ctx.props().children.iter().enumerate().fold(html!{<></>}, |acc, (i, e)| {
+                  html_template! {
+                    { acc }
+                    // don't want to draw a divider for the first element
+                    if i > 0 {
+                        <SplitPanelDivider i={ i - 1 } orientation={ ctx.props().orientation } link={ ctx.link().clone() }>
                         </SplitPanelDivider>
-                        if i == ctx.props().children.len() - 2 {
-                            { x }
-                        } else {
-                            <SplitPanelChild
-                                style={ self.styles[i + 1].clone() }
-                                ref_={ self.refs[i + 1].clone() }>
-
-                                { x }
-                            </SplitPanelChild>
-                        }
                     }
+                    // last element shouldnt be a SplitPanelChild
+                    if i == ctx.props().children.len() - 1 {
+                        { e }
+                    } else {
+                        <SplitPanelChild
+                                style={ self.styles[i].clone() }
+                                ref_={ self.refs[i].clone() }>
+                                {e}
+                        </SplitPanelChild>
+                    }
+                  }
                 })
             }
         };
 
+        // TODO consider removing this
         if ctx.props().no_wrap {
             html! {{ contents }}
         } else {
@@ -405,7 +403,7 @@ fn split_panel_divider(props: &SplitPanelDividerProps) -> Html {
         SplitPanelMsg::Reset(i)
     });
 
-    // TODO Not sure why, but under some circumstances this can trugger a
+    // TODO Not sure why, but under some circumstances this can trigger a
     // `dragstart`, leading to further drag events which cause perspective
     // havoc.  `event.prevent_default()` in `onmousedown` alternatively fixes
     // this, but also prevents this event from trigger focus-stealing e.g. from
@@ -436,10 +434,9 @@ fn split_panel_child(props: &SplitPanelChildProps) -> Html {
     } else {
         classes!("split-panel-child")
     };
-
     html! {
         <div
-            class={ class }
+            { class }
             ref={ props.ref_.clone() }
             style={ props.style.clone() }>
             { props.children.iter().next().unwrap() }

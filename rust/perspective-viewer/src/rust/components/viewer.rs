@@ -19,6 +19,7 @@ use super::plugin_selector::PluginSelector;
 use super::render_warning::RenderWarning;
 use super::status_bar::StatusBar;
 use super::style::{LocalStyle, StyleProvider};
+use crate::components::expression_editor::ExpressionEditor;
 use crate::config::*;
 use crate::dragdrop::*;
 use crate::model::*;
@@ -61,6 +62,7 @@ pub enum Msg {
     ToggleSettingsComplete(SettingsUpdate, Sender<()>),
     PreloadFontsUpdate,
     RenderLimits(Option<(usize, usize, Option<usize>, Option<usize>)>),
+    ExpressionEditor(Option<Option<String>>),
 }
 
 pub struct PerspectiveViewer {
@@ -68,6 +70,11 @@ pub struct PerspectiveViewer {
     on_rendered: Option<Sender<()>>,
     fonts: FontLoaderProps,
     settings_open: bool,
+    /// Outer option is if it should be open or not
+    /// inner option on which expr to use:
+    /// None for a new expression,
+    /// Some(s) for editing expr `s`.
+    expr_editor: Option<Option<String>>,
     on_resize: Rc<PubSub<()>>,
     on_dimensions_reset: Rc<PubSub<()>>,
     _subscriptions: [Subscription; 1],
@@ -91,6 +98,7 @@ impl Component for PerspectiveViewer {
             on_rendered: None,
             fonts: FontLoaderProps::new(&elem, callback),
             settings_open: false,
+            expr_editor: None,
             on_resize: Default::default(),
             on_dimensions_reset: Default::default(),
             _subscriptions: [limit_sub],
@@ -174,6 +182,14 @@ impl Component for PerspectiveViewer {
                     false
                 }
             }
+            Msg::ExpressionEditor(new_state) => {
+                if self.expr_editor != new_state {
+                    self.expr_editor = new_state;
+                    true
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -204,38 +220,87 @@ impl Component for PerspectiveViewer {
     }
 
     /// `PerspectiveViewer` has two basic UI modes - "open" and "closed".
-    // TODO these may be expensive to buil dbecause they will generate recursively
+    // TODO these may be expensive to build because they will generate recursively
     // from `JsPerspectiveConfig` - they may need caching as in the JavaScript
     // version.
     fn view(&self, ctx: &Context<Self>) -> Html {
         let settings = ctx.link().callback(|_| Msg::ToggleSettingsInit(None, None));
+        let on_close_settings = ctx
+            .link()
+            .callback(|()| Msg::ToggleSettingsInit(None, None));
         let mut class = classes!("settings-closed");
         if ctx.props().is_title() {
             class.push("titled");
         }
 
+        let on_open_expr_panel = ctx.link().callback(|s| Msg::ExpressionEditor(Some(s)));
+
         html_template! {
             <StyleProvider>
                 <LocalStyle href={ css!("viewer") } />
+                // Have to check all the way up here instead of simply
+                // in the html! macro, as conditional-compilation
+                // interacts weirdly with .children (that SplitPanel uses).
+                // https://github.com/yewstack/yew/issues/3256
                 if self.settings_open {
+                    if let Some(ref editor_state) = self.expr_editor {
+                        <SplitPanel
+                            id="app_panel"
+                            reverse=true
+                            on_reset={ self.on_dimensions_reset.callback() }
+                            on_resize_finished={ ctx.props().render_callback() }>
+                            <SettingsPanel
+                                renderer={ &ctx.props().renderer }
+                                dragdrop={ &ctx.props().dragdrop }
+                                session={ &ctx.props().session }
+                                on_resize={ &self.on_resize }
+                                on_dimensions_reset={ &self.on_dimensions_reset }
+                                on_reset={ self.on_dimensions_reset.callback() }
+                                on_resize_finished={ ctx.props().render_callback() }
+                                { on_open_expr_panel }
+                                { on_close_settings }
+                            ></SettingsPanel>
+                            <ExprEditorPanel
+                                session = { &ctx.props().session }
+                                renderer = { &ctx.props().renderer }
+                                expr_alias = { editor_state.clone() }
+                                on_close = { ctx.link().callback(|_| Msg::ExpressionEditor(None)) }
+                            ></ExprEditorPanel>
+                            <div id="main_column">
+                                <StatusBar
+                                    id="status_bar"
+                                    session={ &ctx.props().session }
+                                    renderer={ &ctx.props().renderer }
+                                    presentation={ &ctx.props().presentation }
+                                    on_reset={ ctx.link().callback(|all| Msg::Reset(all, None)) }>
+                                </StatusBar>
+                                <div id="main_panel_container">
+                                    <RenderWarning
+                                        dimensions={ self.dimensions }
+                                        session={ &ctx.props().session }
+                                        renderer={ &ctx.props().renderer }>
+                                    </RenderWarning>
+                                    <slot></slot>
+                                </div>
+                            </div>
+                        </SplitPanel>
+                    } else {
                     <SplitPanel
                         id="app_panel"
                         reverse=true
                         on_reset={ self.on_dimensions_reset.callback() }
                         on_resize_finished={ ctx.props().render_callback() }>
-                        <div id="side_panel" class="column noselect split-panel orient-vertical">
-                            <PluginSelector
-                                session={ &ctx.props().session }
-                                renderer={ &ctx.props().renderer }>
-                            </PluginSelector>
-                            <ColumnSelector
-                                dragdrop={ &ctx.props().dragdrop }
-                                renderer={ &ctx.props().renderer }
-                                session={ &ctx.props().session }
-                                on_resize={ &self.on_resize }
-                                on_dimensions_reset={ &self.on_dimensions_reset }>
-                            </ColumnSelector>
-                        </div>
+                        <SettingsPanel
+                            renderer={ &ctx.props().renderer }
+                            dragdrop={ &ctx.props().dragdrop }
+                            session={ &ctx.props().session }
+                            on_resize={ &self.on_resize }
+                            on_dimensions_reset={ &self.on_dimensions_reset }
+                            on_reset={ self.on_dimensions_reset.callback() }
+                            on_resize_finished={ ctx.props().render_callback() }
+                            { on_open_expr_panel }
+                            { on_close_settings }
+                        ></SettingsPanel>
                         <div id="main_column">
                             <StatusBar
                                 id="status_bar"
@@ -252,13 +317,9 @@ impl Component for PerspectiveViewer {
                                 </RenderWarning>
                                 <slot></slot>
                             </div>
-                            <div
-                                id="settings_button"
-                                class="noselect button open"
-                                onmousedown={ settings }>
-                            </div>
                         </div>
                     </SplitPanel>
+                    }
                 } else {
                     <RenderWarning
                         dimensions={ self.dimensions }
@@ -274,8 +335,7 @@ impl Component for PerspectiveViewer {
                             on_reset={ ctx.link().callback(|all| Msg::Reset(all, None)) }>
                         </StatusBar>
                     }
-
-                    <div id="main_panel_container" class={ class }>
+                    <div id="main_panel_container" { class }>
                         <slot></slot>
                     </div>
                     if !ctx.props().presentation.get_is_workspace() {
@@ -286,7 +346,6 @@ impl Component for PerspectiveViewer {
                         </div>
                     }
                 }
-
             </StyleProvider>
             <FontLoader ..self.fonts.clone()></FontLoader>
         }
@@ -349,4 +408,178 @@ impl PerspectiveViewer {
             }
         };
     }
+}
+
+#[derive(Properties)]
+struct SettingsPanelProps {
+    pub session: Session,
+    pub renderer: Renderer,
+    pub dragdrop: DragDrop,
+    pub on_resize: Rc<PubSub<()>>,
+    pub on_dimensions_reset: Rc<PubSub<()>>,
+    pub on_reset: Callback<()>,
+    pub on_resize_finished: Callback<()>,
+    pub on_close_settings: Callback<()>,
+    pub on_open_expr_panel: Callback<Option<String>>,
+}
+
+impl PartialEq for SettingsPanelProps {
+    fn eq(&self, _rhs: &Self) -> bool {
+        true
+    }
+}
+
+#[function_component]
+fn SettingsPanel(props: &SettingsPanelProps) -> Html {
+    html! {
+        <div id="settings_panel" class="sidebar_column noselect split-panel orient-vertical">
+            <SidebarCloseButton id={ "settings_close_button" } on_close_sidebar={ &props.on_close_settings }></SidebarCloseButton>
+            <PluginSelector
+                session={ &props.session }
+                renderer={ &props.renderer }>
+            </PluginSelector>
+            <ColumnSelector
+                dragdrop={ &props.dragdrop }
+                renderer={ &props.renderer }
+                session={ &props.session }
+                on_resize={ &props.on_resize }
+                on_open_expr_panel={ &props.on_open_expr_panel }
+                on_dimensions_reset={ &props.on_dimensions_reset }>
+            </ColumnSelector>
+        </div>
+    }
+}
+
+#[derive(PartialEq, Clone, Properties)]
+struct ExprEditorPanelProps {
+    pub session: Session,
+    pub renderer: Renderer,
+    /// The expression to edit.
+    /// If None make a new expression
+    /// If Some, it should be the alias of an existing expression.
+    pub expr_alias: Option<String>,
+    /// when this callback is called, the expression editor will close.
+    pub on_close: Callback<()>,
+}
+
+derive_model!(Renderer, Session for ExprEditorPanelProps);
+
+#[function_component]
+fn ExprEditorPanel(p: &ExprEditorPanelProps) -> Html {
+    // If the editor is currently validating the expression.
+    let validating = yew::use_state_eq(|| false);
+    // if expr_alias is Some, this is an edit,
+    //      so use session.create_replace_expression_update
+    // else, this is a creation, do regularly.
+    let on_save = Callback::from({
+        let p = p.clone();
+        move |v| {
+            if let Some(ref alias) = &p.expr_alias {
+                update_expr(alias, &v, &p);
+            } else {
+                save_expr(v, &p);
+            }
+            p.on_close.emit(());
+        }
+    });
+    let on_validate = Callback::from({
+        let validating_state = validating.clone();
+        move |b| validating_state.set(b)
+    });
+    let on_delete = Callback::from({
+        let p = p.clone();
+        move |()| {
+            // Delete button should only appear while editing an existing expr,
+            // but this is how we get the name anyways, and this
+            // feels safer than an unwrap().
+            if let Some(ref s) = p.expr_alias {
+                delete_expr(s, &p);
+            }
+            p.on_close.emit(());
+        }
+    });
+
+    // FIXME: `validating: bool` doesnt work?
+    let validating = if *validating { Some("") } else { None };
+    html! {
+        <div class="sidebar_column expr_editor_column" { validating }>
+            <SidebarCloseButton id={ "expr_editor_close_button" } on_close_sidebar={ &p.on_close }></SidebarCloseButton>
+            <div id="expr_panel_header">
+                <p id="expr_panel_header_title">{ "Edit Expression" }</p>
+            </div>
+            <div id="expr_panel_border">
+            </div>
+            <ExpressionEditor
+                { on_save }
+                { on_validate }
+                { on_delete }
+                session = { &p.session }
+                // TODO: dont clone here (or above), may be expensive!
+                alias = { p.expr_alias.clone() }>
+            </ExpressionEditor>
+        </div>
+    }
+}
+
+#[derive(PartialEq, Clone, Properties)]
+struct SidebarCloseButtonProps {
+    on_close_sidebar: Callback<()>,
+    id: AttrValue,
+}
+
+#[function_component]
+fn SidebarCloseButton(p: &SidebarCloseButtonProps) -> Html {
+    let onclick = Callback::from({
+        let cb = p.on_close_sidebar.clone();
+        move |_| cb.emit(())
+    });
+    let id = &p.id;
+    html! {
+        <div { onclick } { id } class="sidebar_close_button"></div>
+    }
+}
+
+fn update_expr(name: &str, new_expression: &JsValue, props: &ExprEditorPanelProps) {
+    let n = name.to_string();
+    let exp = new_expression.clone();
+    let sesh = props.session.clone();
+    let props = props.clone();
+    ApiFuture::spawn(async move {
+        let update = sesh.create_replace_expression_update(&n, &exp).await;
+        props.update_and_render(update).await?;
+        Ok(())
+    });
+}
+
+fn save_expr(expression: JsValue, props: &ExprEditorPanelProps) {
+    let task = {
+        let expression = expression.as_string().unwrap();
+        let mut expressions = props.session.get_view_config().expressions.clone();
+        expressions.retain(|x| x != &expression);
+        expressions.push(expression);
+        props.update_and_render(ViewConfigUpdate {
+            expressions: Some(expressions),
+            ..Default::default()
+        })
+    };
+
+    ApiFuture::spawn(task);
+}
+
+fn delete_expr(expr_name: &str, props: &ExprEditorPanelProps) {
+    let session = &props.session;
+    let expression = session
+        .metadata()
+        .get_expression_by_alias(expr_name)
+        .unwrap();
+
+    let mut expressions = session.get_view_config().expressions.clone();
+    expressions.retain(|x| x != &expression);
+    let config = ViewConfigUpdate {
+        expressions: Some(expressions),
+        ..ViewConfigUpdate::default()
+    };
+
+    let task = props.update_and_render(config);
+    ApiFuture::spawn(task);
 }

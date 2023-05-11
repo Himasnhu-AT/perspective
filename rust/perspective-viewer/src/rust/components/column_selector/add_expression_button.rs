@@ -1,6 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2018, the Perspective Authors.
 //
 // This file is part of the Perspective library, distributed under the terms
 // of the Apache License 2.0.  The full license can be found in the LICENSE
@@ -9,26 +8,21 @@
 use web_sys::*;
 use yew::prelude::*;
 
-use crate::config::ViewConfigUpdate;
-use crate::custom_elements::expression_editor::ExpressionEditorElement;
-use crate::model::*;
 use crate::renderer::Renderer;
 use crate::session::Session;
-use crate::utils::*;
 use crate::*;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct AddExpressionButtonProps {
     pub session: Session,
     pub renderer: Renderer,
+    pub on_open_expr_panel: Callback<Option<String>>,
 }
 
 derive_model!(Renderer, Session for AddExpressionButtonProps);
 
 pub enum AddExpressionButtonMsg {
-    SaveExpression(JsValue),
     OpenExpressionEditor(bool),
-    CloseExpression,
     MouseEnter(bool),
     MouseLeave,
 }
@@ -38,7 +32,6 @@ use AddExpressionButtonMsg::*;
 #[derive(Default)]
 pub struct AddExpressionButton {
     noderef: NodeRef,
-    expression_editor: Option<ExpressionEditorElement>,
     mouseover: bool,
     mode_open: bool,
 }
@@ -53,56 +46,10 @@ impl Component for AddExpressionButton {
 
     fn update(&mut self, ctx: &Context<Self>, msg: AddExpressionButtonMsg) -> bool {
         match msg {
-            SaveExpression(expression) => {
-                self.mode_open = false;
-                let task = {
-                    let expression = expression.as_string().unwrap();
-                    let mut expressions = ctx.props().session.get_view_config().expressions.clone();
-                    expressions.retain(|x| x != &expression);
-                    expressions.push(expression);
-                    ctx.props().update_and_render(ViewConfigUpdate {
-                        expressions: Some(expressions),
-                        ..Default::default()
-                    })
-                };
-
-                let expr = self.expression_editor.clone();
-                ApiFuture::spawn(async move {
-                    task.await?;
-                    if let Some(editor) = expr.as_ref() {
-                        editor.hide().unwrap_or_default();
-                        editor.reset_empty_expr();
-                    }
-
-                    Ok(())
-                });
-
-                true
-            }
-            OpenExpressionEditor(reset) => {
+            OpenExpressionEditor(_reset) => {
                 self.mode_open = true;
-                if reset {
-                    self.expression_editor = None;
-                }
 
-                let target = self.noderef.cast::<HtmlElement>().unwrap();
-                let expression_editor = self.expression_editor.get_or_insert_with(|| {
-                    let on_save = ctx.link().callback(SaveExpression);
-                    let on_blur = ctx.link().callback(|_| CloseExpression);
-                    ExpressionEditorElement::new(
-                        ctx.props().session.clone(),
-                        on_save,
-                        None,
-                        on_blur,
-                        None,
-                    )
-                });
-
-                expression_editor.open(target);
-                true
-            }
-            CloseExpression => {
-                self.mode_open = false;
+                ctx.props().on_open_expr_panel.emit(None);
                 true
             }
             MouseEnter(is_render) => {

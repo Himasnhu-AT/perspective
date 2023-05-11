@@ -8,11 +8,7 @@
  */
 
 import { test } from "@playwright/test";
-import {
-    compareContentsToSnapshot,
-    shadow_click,
-    shadow_type,
-} from "@finos/perspective-test";
+import { compareContentsToSnapshot } from "@finos/perspective-test";
 
 const path = require("path");
 
