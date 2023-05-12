@@ -479,7 +479,7 @@ fn ExprEditorPanel(p: &ExprEditorPanelProps) -> Html {
             } else {
                 save_expr(v, &p);
             }
-            p.on_close.emit(());
+            // p.on_close.emit(());
         }
     });
     let on_validate = Callback::from({

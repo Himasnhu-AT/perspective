@@ -172,55 +172,53 @@ impl Component for ExpressionEditor {
         .unwrap_or_default();
 
         html_template! {
-            <StyleProvider>
-                <LocalStyle href={ css!("expression-editor") } />
-                <SplitPanel orientation={ Orientation::Vertical }>
-                    <div id="editor-container">
-                        <CodeEditor
-                            expr={ &self.expr }
-                            error={ self.error.clone().map(|x| x.into()) }
-                            { oninput }
-                            { onsave } />
+            <LocalStyle href={ css!("expression-editor") } />
+            <SplitPanel orientation={ Orientation::Vertical }>
+                <div id="editor-container">
+                    <CodeEditor
+                        expr={ &self.expr }
+                        error={ self.error.clone().map(|x| x.into()) }
+                        { oninput }
+                        { onsave } />
 
-                        <div id="psp-expression-editor-actions">
-                            if let Some(err) = &self.error {
-                                <span class="error_icon"></span>
-                                <div class="error">
-                                    { &err.error_message }
-                                </div>
-                            }
+                    <div id="psp-expression-editor-actions">
+                        if let Some(err) = &self.error {
+                            <span class="error_icon"></span>
+                            <div class="error">
+                                { &err.error_message }
+                            </div>
+                        }
 
-                            if is_closable {
-                                <button
-                                    id="psp-expression-editor-button-delete"
-                                    class="psp-expression-editor__button"
-                                    onmousedown={ delete }>
-                                    { "Delete" }
-                                </button>
-                            }
-
-                            if ctx.props().alias.is_some() {
-                                <button
-                                    id="psp-expression-editor-button-reset"
-                                    class="psp-expression-editor__button"
-                                    onmousedown={ reset }
-                                    disabled={ !self.edit_enabled }>
-                                    { "Reset" }
-                                </button>
-                            }
-
+                        if is_closable {
                             <button
-                                id="psp-expression-editor-button-save"
+                                id="psp-expression-editor-button-delete"
                                 class="psp-expression-editor__button"
-                                onmousedown={ save }
-                                disabled={ !self.save_enabled }>
-                                { "Save" }
+                                onmousedown={ delete }>
+                                { "Delete" }
                             </button>
-                        </div>
+                        }
+
+                        if ctx.props().alias.is_some() {
+                            <button
+                                id="psp-expression-editor-button-reset"
+                                class="psp-expression-editor__button"
+                                onmousedown={ reset }
+                                disabled={ !self.edit_enabled }>
+                                { "Reset" }
+                            </button>
+                        }
+
+                        <button
+                            id="psp-expression-editor-button-save"
+                            class="psp-expression-editor__button"
+                            onmousedown={ save }
+                            disabled={ !self.save_enabled }>
+                            { "Save" }
+                        </button>
                     </div>
-                    <div id="phantom_div"></div>
-                </SplitPanel>
-            </StyleProvider>
+                </div>
+                <div id="phantom_div"></div>
+            </SplitPanel>
         }
     }
 }
